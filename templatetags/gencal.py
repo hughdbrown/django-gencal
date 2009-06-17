@@ -119,44 +119,40 @@ def gencal(date = datetime.datetime.today(), cal_items=[]):
         </style>
 
     """
+    def get_iterable_days(year, month) :
+        month_range = calendar.monthrange(year, month)
+        first_day_of_month = datetime.date(year, month, 1)
+        last_day_of_month = datetime.date(year, month, month_range[1])
+    
+        # first day of calendar is:
+        #
+        # first day of the month with days counted back (timedelta)
+        # until Sunday which is day-of-week_num plus one (for the
+        # 0 offset)
+        #
+        # last day of calendar is:
+        #
+        # the last day of the month with days added on (timedelta)
+        # until saturday[5] (the last day of our calendar)
+        first_day_of_calendar = first_day_of_month - datetime.timedelta(first_day_of_month.weekday())
+        extra_days = 12 - last_day_of_month.weekday()
+        return [ (first_day_of_calendar + datetime.timedelta(i)) for i in range(month_range[1] + extra_days) ]
+
+    def get_prev_next_months(year, month) :
+        lastmonth, nextmonth = month - 1, month + 1
+        lastyear, nextyear = year, year
+        if lastmonth == 0:
+            lastmonth = 12
+            lastyear -= 1
+        elif nextmonth == 13:
+            nextmonth = 1
+            nextyear += 1
+        return (datetime.date(lastyear, lastmonth, 1), datetime.date(nextyear, nextmonth, 1))
+
     # Set the values pulled in from urls.py to integers from strings
     year, month = date.year, date.month
+    prev_date, next_date = get_prev_next_months(year, month)
     
-    # account for previous month in case of Jan
-    lastmonth, nextmonth = month - 1, month + 1
-    lastyear, nextyear = year, year
-    if lastmonth == 0:
-        lastmonth = 12
-        lastyear -= 1
-    elif nextmonth == 13:
-        nextmonth = 1
-        nextyear += 1
-
-    prev_date = datetime.date(lastyear, lastmonth, 1)
-    next_date = datetime.date(nextyear, nextmonth, 1)
-
-    month_range = calendar.monthrange(year, month)
-    first_day_of_month = datetime.date(year, month, 1)
-    last_day_of_month = datetime.date(year, month, month_range[1])
-    num_days_last_month = calendar.monthrange(year, lastmonth)[1]
-
-    # first day of calendar is:
-    #
-    # first day of the month with days counted back (timedelta)
-    # until Sunday which is day-of-week_num plus one (for the
-    # 0 offset)
-    #
-
-    first_day_of_calendar = first_day_of_month - datetime.timedelta(first_day_of_month.weekday())
-
-    # last day of calendar is:
-    #
-    # the last day of the month with days added on (timedelta)
-    # until saturday[5] (the last day of our calendar)
-    #
-
-    last_day_of_calendar = last_day_of_month + datetime.timedelta(12 - last_day_of_month.weekday())
-
     events_by_day = defaultdict(list)
     for event in cal_items:
         d = event['day']
@@ -165,14 +161,13 @@ def gencal(date = datetime.datetime.today(), cal_items=[]):
 
     month_cal = []
     week = []
-    week_headers = [header for header in calendar.weekheader(2).split(' ')]
-    day = first_day_of_calendar
-    while day <= last_day_of_calendar:
+    for day in get_iterable_days(year, month):
         cal_day = {'day': day, 'event': events_by_day[day], 'in_month': (day.month == month)}
         week.append(cal_day)        # Add the current day to the week
         if day.weekday() == 6:      # When Sunday comes, add the week to the calendar
             month_cal.append(week)
             week = []               # Reset the week
-        day += datetime.timedelta(1)        # set day to next day (in datetime object)
+
+    week_headers = [header for header in calendar.weekheader(2).split(' ')]
 
     return {'month_cal': month_cal, 'headers': week_headers, 'date':date, 'prev_date':prev_date, 'next_date':next_date }
