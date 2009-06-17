@@ -136,7 +136,11 @@ def gencal(date = datetime.datetime.today(), cal_items=[]):
         # until saturday[5] (the last day of our calendar)
         first_day_of_calendar = first_day_of_month - datetime.timedelta(first_day_of_month.weekday())
         extra_days = 12 - last_day_of_month.weekday()
-        return [ (first_day_of_calendar + datetime.timedelta(i)) for i in range(month_range[1] + extra_days) ]
+        total_days_in_calendar = month_range[1] + extra_days
+        total_days_in_calendar -= (total_days_in_calendar % 7)
+        for i in range(total_days_in_calendar):
+            yield (first_day_of_calendar + datetime.timedelta(i))
+        return
 
     def get_prev_next_months(year, month) :
         lastmonth, nextmonth = month - 1, month + 1
@@ -146,21 +150,20 @@ def gencal(date = datetime.datetime.today(), cal_items=[]):
             lastyear -= 1
         elif nextmonth == 13:
             nextmonth = 1
-            nextyear += 1
+            nextyear += 1 
         return (datetime.date(lastyear, lastmonth, 1), datetime.date(nextyear, nextmonth, 1))
 
     # Set the values pulled in from urls.py to integers from strings
     year, month = date.year, date.month
     prev_date, next_date = get_prev_next_months(year, month)
-    
+
     events_by_day = defaultdict(list)
     for event in cal_items:
         d = event['day']
         d = datetime.date(d.year, d.month, d.day)
         events_by_day[d].append({'title':event['title'], 'url':event['url'], 'class':event['class'], 'timestamp':event['day'] })
 
-    month_cal = []
-    week = []
+    week, month_cal = [], []
     for day in get_iterable_days(year, month):
         cal_day = {'day': day, 'event': events_by_day[day], 'in_month': (day.month == month)}
         week.append(cal_day)        # Add the current day to the week
@@ -171,3 +174,4 @@ def gencal(date = datetime.datetime.today(), cal_items=[]):
     week_headers = [header for header in calendar.weekheader(2).split(' ')]
 
     return {'month_cal': month_cal, 'headers': week_headers, 'date':date, 'prev_date':prev_date, 'next_date':next_date }
+
