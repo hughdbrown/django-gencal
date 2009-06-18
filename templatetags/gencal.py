@@ -58,20 +58,27 @@ def simple_gencal(parser, token):
     'my/template.html' is the template to render (Defaults to gencal/gencal.html)
 
     """
+    simple_gencal_syntax = "simple_gencal syntax: simple_gencal for Base.Model on date_field [in DateObject [with 'my/template.html']]"
     bits = token.contents.split()
-    if len(bits) > 9:
-        raise TemplateSyntaxError, "simple_gencal takes a maximum of 8 arguments"
-    try:
-        if (bits[5] == 'in'):
+    
+    # test for presence of keywords
+    keywords = ["for", "on", "in", "with"]
+    iterations = min(len(keywords), len(bits) // 2)
+    if any(keywords[i] != bits[2 * i + 1].lower() for i in range(iterations)):
+        raise TemplateSyntaxError, simple_gencal_syntax
+    elif len(bits) not in [5,7,9]:
+        raise TemplateSyntaxError, simple_gencal_syntax
+    else:
+        # model and field must be provided
+        model, field = bits[2], bits[4]
+        date_obj, template = 'date', "gencal/gencal.html"
+        try:
+            # date_obj and template may be provided
+            date_obj = bits[6]
+            template = bits[8]
+        except IndexError:
             pass
-    except IndexError:
-        # This means it wasn't passed in, so assign the defaults.
-        # Need to investigate *args and **args b/c what if 
-        # they want to define a template but not the month to render?
-        pass
-        
-    # FIXME: Need to add checks in for simple_gencal to make sure people are using the correct arguments and such
-    return SimpleGencalNode(bits[2], bits[4], bits[6], bits[8])
+    return SimpleGencalNode(model, field, date_obj, template)
 
 @register.inclusion_tag('gencal/gencal.html') # TODO: Make this generic
 def gencal(date = datetime.datetime.today(), cal_items=[]):
@@ -119,29 +126,25 @@ def gencal(date = datetime.datetime.today(), cal_items=[]):
         </style>
 
     """
+    # Iterator of all days to be shown in calendar given a year/month
+    # includes possible stub of days at tail of previous month and possible
+    # stub of days at head of next month to round out each week-list to 7 days.
     def get_iterable_days(year, month) :
         month_range = calendar.monthrange(year, month)
+        days_in_month = month_range[1]
         first_day_of_month = datetime.date(year, month, 1)
-        last_day_of_month = datetime.date(year, month, month_range[1])
+        last_day_of_month = datetime.date(year, month, days_in_month)
     
-        # first day of calendar is:
-        #
-        # first day of the month with days counted back (timedelta)
-        # until Sunday which is day-of-week_num plus one (for the
-        # 0 offset)
-        #
-        # last day of calendar is:
-        #
-        # the last day of the month with days added on (timedelta)
-        # until saturday[5] (the last day of our calendar)
         first_day_of_calendar = first_day_of_month - datetime.timedelta(first_day_of_month.weekday())
-        extra_days = 12 - last_day_of_month.weekday()
-        total_days_in_calendar = month_range[1] + extra_days
-        total_days_in_calendar -= (total_days_in_calendar % 7)
+        head_days = first_day_of_month.weekday()
+        tail_days = 6 - last_day_of_month.weekday()
+        total_days_in_calendar = head_days + days_in_month + tail_days
+        assert total_days_in_calendar%7 == 0
         for i in range(total_days_in_calendar):
             yield (first_day_of_calendar + datetime.timedelta(i))
         return
 
+    # Calculate the 1st of previous and next months (for navigation in template)
     def get_prev_next_months(year, month) :
         lastmonth, nextmonth = month - 1, month + 1
         lastyear, nextyear = year, year
@@ -153,16 +156,19 @@ def gencal(date = datetime.datetime.today(), cal_items=[]):
             nextyear += 1 
         return (datetime.date(lastyear, lastmonth, 1), datetime.date(nextyear, nextmonth, 1))
 
+    # Reduce cal_items to a day-keyed dictionary of lists of events
+    def get_events_by_day(cal_items):
+        events_by_day = defaultdict(list)
+        for event in cal_items:
+            d = event['day']
+            d = datetime.date(d.year, d.month, d.day)
+            events_by_day[d].append({'title':event['title'], 'url':event['url'], 'class':event['class'], 'timestamp':event['day'] })
+        return events_by_day
+    
     # Set the values pulled in from urls.py to integers from strings
     year, month = date.year, date.month
-    prev_date, next_date = get_prev_next_months(year, month)
-
-    events_by_day = defaultdict(list)
-    for event in cal_items:
-        d = event['day']
-        d = datetime.date(d.year, d.month, d.day)
-        events_by_day[d].append({'title':event['title'], 'url':event['url'], 'class':event['class'], 'timestamp':event['day'] })
-
+    
+    events_by_day = get_events_by_day(cal_items)
     week, month_cal = [], []
     for day in get_iterable_days(year, month):
         cal_day = {'day': day, 'event': events_by_day[day], 'in_month': (day.month == month)}
@@ -172,6 +178,6 @@ def gencal(date = datetime.datetime.today(), cal_items=[]):
             week = []               # Reset the week
 
     week_headers = [header for header in calendar.weekheader(2).split(' ')]
+    prev_date, next_date = get_prev_next_months(year, month)
 
     return {'month_cal': month_cal, 'headers': week_headers, 'date':date, 'prev_date':prev_date, 'next_date':next_date }
-
