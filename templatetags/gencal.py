@@ -37,7 +37,8 @@ class SimpleGencalNode(Node):
         self.field = str(self.field)
         year, month = getattr(self.date_obj, 'year'), getattr(self.date_obj, 'month')
         year_key, month_key = ("%s__year" % self.field), ("%s__month" % self.field)
-        event_set = self.model._default_manager.filter( **{ year_key:year } ).filter( **{ month_key:month })
+        d = { year_key:year, month_key:month }
+        event_set = self.model._default_manager.filter( **d )
 
         cal_items = [{ 'day':getattr(event, self.field), 'title':event.__unicode__(), 'url':event.get_absolute_url(), 'class':'' } for event in event_set]
 
